@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TrendVault</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    body { background:#C9C2B8; overscroll-behavior:none; font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif; }
+    input,select,textarea,button { font-family:inherit; }
+    input::placeholder,textarea::placeholder { color:#8C857E; }
+    ::-webkit-scrollbar { width:0; height:0; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes pop { 0%{opacity:0;transform:scale(0.9) translateY(20px)} 60%{transform:scale(1.01) translateY(-2px)} 100%{opacity:1;transform:scale(1) translateY(0)} }
+    @keyframes slideSheet { from{transform:translateY(100%)} to{transform:translateY(0)} }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+    @keyframes drift { 0%,100%{transform:translateY(0) translateX(0)} 33%{transform:translateY(-18px) translateX(8px)} 66%{transform:translateY(10px) translateX(-6px)} }
+    @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    .card-wrap { animation:fadeUp 0.35s ease both; }
+    .delete-btn:hover { color:#C0392B !important; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Firebase init
+    const firebaseConfig = {
+      apiKey:            "AIzaSyAjR9deZ7Bj13Bi2F8u_vq2",
+      authDomain:        "trendvault-f7e7e.firebaseapp.com",
+      databaseURL:       "https://trendvault-f7e7e-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId:         "trendvault-f7e7e",
+      storageBucket:     "trendvault-f7e7e.firebasestorage.app",
+      messagingSenderId: "367792379711",
+      appId:             "1:367792379711:web:a2e8764f1b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const C = {
+      bg:"#C9C2B8", bgLight:"#D8D2CA",
+      surface:"rgba(236,230,222,0.7)", surfaceHi:"rgba(243,238,232,0.85)",
+      dark:"#1C1916", mid:"#5A534C", muted:"#8C857E",
+      border:"rgba(28,25,22,0.1)", borderHi:"rgba(28,25,22,0.18)",
+    };
+
+    const P = {
+      TikTok:    {accent:"#FE2C55",glow:"#FE2C5540",icon:"TK",grad:"linear-gradient(135deg,#FE2C55,#FF7043)"},
+      Instagram: {accent:"#B33AB4",glow:"#B33AB440",icon:"IG",grad:"linear-gradient(135deg,#833AB4,#C13584,#E1306C)"},
+      Facebook:  {accent:"#1877F2",glow:"#1877F240",icon:"FB",grad:"linear-gradient(135deg,#1565C0,#1877F2)"},
+    };
+
+    const STATUSES   = ["Saved","In Progress","Used"];
+    const CATEGORIES = ["Hook","Transition","Product Demo","Storytelling","Trending Audio","CTA","Lain-lain"];
+
+    const STATUS_CFG = {
+      "Saved":       {color:"#7A736C",dot:"#A09890",bg:"rgba(28,25,22,0.06)"},
+      "In Progress": {color:"#A85A10",dot:"#D4720E",bg:"rgba(212,114,14,0.1)"},
+      "Used":        {color:"#1A6B3C",dot:"#22A35A",bg:"rgba(34,163,90,0.1)"},
+    };
+
+    function AmbientBg() {
+      const blobs=[
+        {size:480,top:"-8%",left:"58%",color:"#D9D2C8",dur:9,delay:0},
+        {size:360,top:"45%",left:"-8%",color:"#CAC3B8",dur:11,delay:2},
+        {size:260,top:"72%",left:"68%",color:"#C5BEB4",dur:8,delay:1.5},
+        {size:180,top:"22%",left:"32%",color:"#DDD7D0",dur:13,delay:3},
+      ];
+      return (
+        <div style={{position:"fixed",inset:0,zIndex:0,pointerEvents:"none",overflow:"hidden"}}>
+          {blobs.map((b,i)=>(
+            <div key={i} style={{
+              position:"absolute",width:b.size,height:b.size,
+              top:b.top,left:b.left,borderRadius:"50%",
+              background:`radial-gradient(circle,${b.color} 0%,transparent 68%)`,
+              filter:"blur(72px)",opacity:0.55,
+              animation:`drift ${b.dur}s ease-in-out infinite`,
+              animationDelay:`${b.delay}s`,
+            }}/>
+          ))}
+        </div>
+      );
+    }
+
+    function Spinner() {
+      return (
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"60vh",gap:16}}>
+          <div style={{width:40,height:40,borderRadius:"50%",border:`3px solid ${C.border}`,borderTop:`3px solid ${C.mid}`,animation:"spin 0.8s linear infinite"}}/>
+          <div style={{fontSize:13,color:C.muted}}>Connecting to Firebase...</div>
+        </div>
+      );
+    }
+
+    function Stars({val,onChange}) {
+      const [hov,setHov]=useState(0);
+      return (
+        <div style={{display:"flex",gap:2}}>
+          {[1,2,3,4,5].map(s=>(
+            <span key={s}
+              onMouseEnter={()=>onChange&&setHov(s)}
+              onMouseLeave={()=>onChange&&setHov(0)}
+              onClick={()=>onChange&&onChange(s)}
+              style={{fontSize:15,cursor:onChange?"pointer":"default",color:s<=(hov||val)?"#C4880A":"rgba(28,25,22,0.15)",transition:"color 0.1s,transform 0.1s",display:"inline-block",transform:s<=(hov||val)?"scale(1.18)":"scale(1)"}}>★</span>
+          ))}
+        </div>
+      );
+    }
+
+    function PTag({platform}) {
+      const p=P[platform];
+      return (
+        <span style={{background:`${p.accent}18`,border:`1px solid ${p.accent}50`,borderRadius:6,padding:"3px 8px",fontSize:9,fontWeight:800,letterSpacing:1.4,color:p.accent,display:"inline-flex",alignItems:"center",gap:5}}>
+          <span style={{fontSize:8,fontWeight:900}}>{p.icon}</span>
+          {platform.toUpperCase()}
+        </span>
+      );
+    }
+
+    function STag({status,onClick}) {
+      const s=STATUS_CFG[status];
+      return (
+        <span onClick={onClick} style={{background:s.bg,border:`1px solid ${s.dot}50`,borderRadius:6,padding:"3px 9px",fontSize:10,fontWeight:700,color:s.color,display:"inline-flex",alignItems:"center",gap:5,cursor:onClick?"pointer":"default",userSelect:"none",transition:"opacity 0.15s"}}>
+          <span style={{width:5,height:5,borderRadius:"50%",background:s.dot,flexShrink:0,animation:status==="In Progress"?"blink 1.3s infinite":"none"}}/>
+          {status}
+        </span>
+      );
+    }
+
+    function VideoCard({v,onUpdate,onDelete}) {
+      const [showComments,setShowComments]=useState(false);
+      const [comment,setComment]=useState("");
+      const ref2=useRef(null);
+      const p=P[v.platform];
+
+      const tilt=e=>{
+        const r=ref2.current.getBoundingClientRect();
+        const x=(e.clientX-r.left)/r.width-0.5;
+        const y=(e.clientY-r.top)/r.height-0.5;
+        ref2.current.style.transform=`perspective(1000px) rotateY(${x*9}deg) rotateX(${-y*9}deg) translateZ(4px)`;
+      };
+      const resetTilt=()=>{ref2.current.style.transform="perspective(1000px) rotateY(0) rotateX(0) translateZ(0)";};
+
+      const cycleStatus=()=>{
+        const i=STATUSES.indexOf(v.status);
+        onUpdate(v.firebaseKey,{status:STATUSES[(i+1)%STATUSES.length]});
+      };
+
+      const addComment=()=>{
+        if(!comment.trim())return;
+        const updated=[...(v.comments||[]),comment.trim()];
+        onUpdate(v.firebaseKey,{comments:updated});
+        setComment("");
+      };
+
+      return (
+        <div className="card-wrap" ref={ref2} onMouseMove={tilt} onMouseLeave={resetTilt} style={{transition:"transform 0.18s ease"}}>
+          <div style={{background:C.surfaceHi,backdropFilter:"blur(28px)",WebkitBackdropFilter:"blur(28px)",border:"1px solid rgba(255,255,255,0.65)",borderBottom:`1px solid ${C.border}`,borderRight:`1px solid ${C.border}`,borderRadius:20,overflow:"hidden",boxShadow:"0 2px 0 rgba(255,255,255,0.9) inset,0 6px 24px rgba(28,25,22,0.1)",transition:"box-shadow 0.25s"}}
+            onMouseEnter={e=>e.currentTarget.style.boxShadow=`0 2px 0 rgba(255,255,255,0.9) inset,0 16px 40px rgba(28,25,22,0.15),0 0 0 1.5px ${p.accent}44`}
+            onMouseLeave={e=>e.currentTarget.style.boxShadow="0 2px 0 rgba(255,255,255,0.9) inset,0 6px 24px rgba(28,25,22,0.1)"}
+          >
+            <div onClick={()=>window.open(v.url,"_blank")} style={{height:160,cursor:"pointer",position:"relative",overflow:"hidden",background:`linear-gradient(160deg,${C.bgLight} 0%,${p.accent}1A 100%)`}}>
+              <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 80% 20%,${p.accent}18 0%,transparent 60%)`}}/>
+              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <div style={{width:52,height:52,borderRadius:"50%",background:"rgba(236,230,222,0.45)",border:"1.5px solid rgba(236,230,222,0.75)",backdropFilter:"blur(12px)",display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(28,25,22,0.75)",fontSize:18,boxShadow:"0 4px 20px rgba(28,25,22,0.15)",transition:"transform 0.2s,background 0.2s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.1)";e.currentTarget.style.background="rgba(236,230,222,0.65)";}}
+                  onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.background="rgba(236,230,222,0.45)";}}
+                >▶</div>
+              </div>
+              <div style={{position:"absolute",top:12,left:12,right:12,display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <PTag platform={v.platform}/>
+                <span style={{background:"rgba(28,25,22,0.3)",backdropFilter:"blur(8px)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:6,padding:"3px 8px",fontSize:9.5,color:"rgba(236,230,222,0.9)"}}>{v.category}</span>
+              </div>
+              <div style={{position:"absolute",bottom:0,left:0,right:0,height:50,background:`linear-gradient(to top,${C.surfaceHi}CC,transparent)`}}/>
+            </div>
+
+            <div style={{padding:"14px 16px 16px"}}>
+              <div style={{fontSize:14.5,fontWeight:700,color:C.dark,lineHeight:1.4,marginBottom:11,letterSpacing:-0.3}}>{v.title}</div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                <Stars val={v.rating} onChange={r=>onUpdate(v.firebaseKey,{rating:r})}/>
+                <STag status={v.status} onClick={cycleStatus}/>
+              </div>
+              {v.notes&&(
+                <div style={{background:"rgba(28,25,22,0.04)",border:`1px solid ${C.border}`,borderLeft:`2.5px solid ${p.accent}70`,borderRadius:9,padding:"8px 11px",fontSize:12,color:C.mid,lineHeight:1.55,marginBottom:11}}>{v.notes}</div>
+              )}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:11,color:C.muted}}><strong style={{color:C.mid,fontWeight:700}}>{v.savedBy}</strong> · {v.savedAt}</span>
+                <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                  <button onClick={()=>setShowComments(!showComments)} style={{background:"none",border:"none",cursor:"pointer",padding:0,fontSize:12,color:showComments?p.accent:C.muted,display:"flex",alignItems:"center",gap:3,transition:"color 0.15s"}}>💬 {(v.comments||[]).length}</button>
+                  <button className="delete-btn" onClick={()=>onDelete(v.firebaseKey)} style={{background:"none",border:"none",cursor:"pointer",padding:0,fontSize:12,color:C.muted,transition:"color 0.15s"}}>✕</button>
+                </div>
+              </div>
+              {showComments&&(
+                <div style={{marginTop:10,animation:"fadeUp 0.2s ease"}}>
+                  {(v.comments||[]).length>0&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:7}}>
+                      {(v.comments||[]).map((c,i)=>(
+                        <div key={i} style={{background:"rgba(28,25,22,0.04)",border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",fontSize:12,color:C.mid,lineHeight:1.4}}>{c}</div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{display:"flex",gap:6}}>
+                    <input value={comment} onChange={e=>setComment(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addComment()} placeholder="Tulis comment..."
+                      style={{flex:1,background:"rgba(28,25,22,0.05)",border:`1px solid ${C.border}`,borderRadius:9,padding:"7px 11px",color:C.dark,fontSize:12,outline:"none"}}
+                      onFocus={e=>e.target.style.border=`1px solid ${p.accent}80`}
+                      onBlur={e=>e.target.style.border=`1px solid ${C.border}`}
+                    />
+                    <button onClick={addComment} style={{background:p.grad,border:"none",borderRadius:9,padding:"7px 13px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",flexShrink:0,boxShadow:`0 4px 12px ${p.glow}`}}>↑</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function AddModal({onAdd,onClose}) {
+      const [form,setForm]=useState({url:"",title:"",platform:"TikTok",category:"Hook",notes:"",rating:3,savedBy:"Ali"});
+      const [saving,setSaving]=useState(false);
+      const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+      const p=P[form.platform];
+
+      const submit=async()=>{
+        if(!form.url.trim()||!form.title.trim())return;
+        setSaving(true);
+        await onAdd({...form,status:"Saved",comments:[],savedAt:new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short"}),createdAt:Date.now()});
+        setSaving(false);
+        onClose();
+      };
+
+      const iStyle={width:"100%",background:"rgba(28,25,22,0.05)",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 13px",color:C.dark,fontSize:13,outline:"none",transition:"border 0.15s,box-shadow 0.15s"};
+
+      return (
+        <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(28,25,22,0.35)",backdropFilter:"blur(10px)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+          <div style={{width:"100%",maxWidth:520,background:"rgba(232,226,218,0.97)",backdropFilter:"blur(32px)",borderRadius:"22px 22px 0 0",borderTop:"1.5px solid rgba(255,255,255,0.75)",padding:"0 22px 36px",maxHeight:"92vh",overflowY:"auto",animation:"slideSheet 0.32s cubic-bezier(0.32,0.72,0,1)",boxShadow:"0 -8px 48px rgba(28,25,22,0.15)"}}>
+            <div style={{display:"flex",justifyContent:"center",padding:"14px 0 10px"}}>
+              <div style={{width:36,height:4,borderRadius:2,background:"rgba(28,25,22,0.18)"}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:22}}>
+              <div>
+                <div style={{fontSize:20,fontWeight:900,color:C.dark,letterSpacing:-0.6}}>Save Video</div>
+                <div style={{fontSize:11.5,color:C.muted,marginTop:2}}>Tambah ke TrendVault</div>
+              </div>
+              <button onClick={onClose} style={{width:32,height:32,borderRadius:"50%",background:"rgba(28,25,22,0.08)",border:`1px solid ${C.border}`,color:C.mid,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+            </div>
+
+            <div style={{marginBottom:18}}>
+              <div style={{fontSize:10,fontWeight:700,color:C.muted,letterSpacing:1.8,marginBottom:8}}>PLATFORM</div>
+              <div style={{display:"flex",gap:8}}>
+                {["TikTok","Instagram","Facebook"].map(pl=>{
+                  const pp=P[pl];const sel=form.platform===pl;
+                  return <button key={pl} onClick={()=>set("platform",pl)} style={{flex:1,padding:"11px 0",background:sel?`${pp.accent}14`:"rgba(28,25,22,0.05)",border:`1.5px solid ${sel?pp.accent+"60":C.border}`,borderRadius:12,cursor:"pointer",color:sel?pp.accent:C.muted,fontSize:12.5,fontWeight:800,boxShadow:sel?`0 4px 16px ${pp.glow}`:"none",transition:"all 0.2s"}}>{pp.icon} · {pl}</button>;
+                })}
+              </div>
+            </div>
+
+            {[
+              {label:"URL VIDEO",key:"url",ph:"https://tiktok.com/@...",multi:false},
+              {label:"TITLE",key:"title",ph:"Apa yang menarik pasal video ni?",multi:false},
+              {label:"SAVED BY",key:"savedBy",ph:"Nama kau",multi:false},
+              {label:"NOTES",key:"notes",ph:"Hook dia best, nak cuba untuk...",multi:true},
+            ].map(({label,key,ph,multi})=>(
+              <div key={key} style={{marginBottom:15}}>
+                <div style={{fontSize:10,fontWeight:700,color:C.muted,letterSpacing:1.8,marginBottom:7}}>{label}</div>
+                {multi
+                  ?<textarea value={form[key]} onChange={e=>set(key,e.target.value)} placeholder={ph} rows={2} style={{...iStyle,resize:"none"}} onFocus={e=>{e.target.style.border=`1px solid ${p.accent}70`;e.target.style.boxShadow=`0 0 0 3px ${p.accent}12`;}} onBlur={e=>{e.target.style.border=`1px solid ${C.border}`;e.target.style.boxShadow="none";}}/>
+                  :<input value={form[key]} onChange={e=>set(key,e.target.value)} placeholder={ph} style={iStyle} onFocus={e=>{e.target.style.border=`1px solid ${p.accent}70`;e.target.style.boxShadow=`0 0 0 3px ${p.accent}12`;}} onBlur={e=>{e.target.style.border=`1px solid ${C.border}`;e.target.style.boxShadow="none";}}/>
+                }
+              </div>
+            ))}
+
+            <div style={{display:"flex",gap:12,marginBottom:24,alignItems:"flex-end"}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:10,fontWeight:700,color:C.muted,letterSpacing:1.8,marginBottom:7}}>KATEGORI</div>
+                <select value={form.category} onChange={e=>set("category",e.target.value)} style={{...iStyle,cursor:"pointer"}}>
+                  {CATEGORIES.map(c=><option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div style={{paddingBottom:10}}>
+                <div style={{fontSize:10,fontWeight:700,color:C.muted,letterSpacing:1.8,marginBottom:10}}>RATING</div>
+                <Stars val={form.rating} onChange={r=>set("rating",r)}/>
+              </div>
+            </div>
+
+            <button onClick={submit} disabled={saving} style={{width:"100%",background:saving?"rgba(28,25,22,0.15)":p.grad,border:"none",borderRadius:14,padding:"14px",color:saving?C.muted:"#fff",fontSize:14,fontWeight:800,cursor:saving?"not-allowed":"pointer",boxShadow:saving?"none":`0 8px 22px ${p.glow}`,transition:"all 0.15s"}}>
+              {saving?"Saving...":"Simpan →"}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [videos,setVideos]=useState([]);
+      const [loading,setLoading]=useState(true);
+      const [filter,setFilter]=useState("All");
+      const [search,setSearch]=useState("");
+      const [sortBy,setSortBy]=useState("latest");
+      const [showModal,setShowModal]=useState(false);
+      const [toast,setToast]=useState(null);
+
+      useEffect(()=>{
+        const ref2=db.ref("videos");
+        ref2.on("value",snapshot=>{
+          const data=snapshot.val();
+          if(data){
+            const arr=Object.entries(data).map(([key,val])=>({...val,firebaseKey:key}));
+            setVideos(arr.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)));
+          }else{setVideos([]);}
+          setLoading(false);
+        });
+        return ()=>ref2.off();
+      },[]);
+
+      const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),2000);};
+      const addVideo=async v=>{await db.ref("videos").push(v);showToast("Saved! 🔥");};
+      const updateVideo=async(key,changes)=>{await db.ref(`videos/${key}`).update(changes);showToast("Updated ✓");};
+      const deleteVideo=async key=>{await db.ref(`videos/${key}`).remove();showToast("Removed");};
+
+      const filtered=videos
+        .filter(v=>filter==="All"||v.platform===filter)
+        .filter(v=>!search||v.title?.toLowerCase().includes(search.toLowerCase())||v.notes?.toLowerCase().includes(search.toLowerCase()))
+        .sort((a,b)=>sortBy==="rating"?(b.rating||0)-(a.rating||0):(b.createdAt||0)-(a.createdAt||0));
+
+      const stats={
+        total:videos.length,
+        inProgress:videos.filter(v=>v.status==="In Progress").length,
+        used:videos.filter(v=>v.status==="Used").length,
+      };
+
+      return (
+        <div style={{minHeight:"100vh",background:C.bg,color:C.dark,fontFamily:"-apple-system,BlinkMacSystemFont,'Inter',sans-serif",position:"relative"}}>
+          <AmbientBg/>
+
+          {toast&&(
+            <div style={{position:"fixed",top:20,left:"50%",transform:"translateX(-50%)",zIndex:300,background:"rgba(232,226,218,0.95)",backdropFilter:"blur(20px)",border:"1px solid rgba(255,255,255,0.7)",borderRadius:20,padding:"8px 20px",fontSize:13,fontWeight:600,color:C.dark,animation:"pop 0.25s ease",boxShadow:"0 6px 24px rgba(28,25,22,0.14)",whiteSpace:"nowrap"}}>{toast}</div>
+          )}
+
+          <div style={{position:"sticky",top:0,zIndex:100,background:"rgba(196,188,178,0.88)",backdropFilter:"blur(30px)",WebkitBackdropFilter:"blur(30px)",borderBottom:"1px solid rgba(255,255,255,0.45)",boxShadow:"0 1px 0 rgba(28,25,22,0.06)"}}>
+            <div style={{padding:"13px 18px 11px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+              <div style={{display:"flex",flexDirection:"column",lineHeight:1}}>
+                <span style={{fontSize:20,fontWeight:900,letterSpacing:-0.9,color:C.dark}}>TrendVault</span>
+                <span style={{fontSize:8.5,letterSpacing:2.8,color:C.muted,fontWeight:600,marginTop:1}}>VIDEO INSPIRATION</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0}}>
+                {[{val:stats.total,color:C.mid},{val:stats.inProgress,color:"#B35A10"},{val:stats.used,color:"#1A6B3A"}].map((s,i)=>(
+                  <div key={i} style={{background:"rgba(236,230,222,0.55)",border:"1px solid rgba(255,255,255,0.6)",borderRadius:20,padding:"4px 11px",fontSize:14,fontWeight:800,color:s.color,lineHeight:1,backdropFilter:"blur(10px)",boxShadow:"0 1px 0 rgba(255,255,255,0.7) inset"}}>{s.val}</div>
+                ))}
+                <button onClick={()=>setShowModal(true)} style={{background:"linear-gradient(135deg,#FE2C55,#D81B60)",border:"none",borderRadius:12,padding:"9px 16px",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 4px 14px rgba(254,44,85,0.38)",transition:"transform 0.15s,box-shadow 0.15s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px) scale(1.02)";e.currentTarget.style.boxShadow="0 7px 20px rgba(254,44,85,0.48)";}}
+                  onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0) scale(1)";e.currentTarget.style.boxShadow="0 4px 14px rgba(254,44,85,0.38)";}}
+                >+ Save</button>
+              </div>
+            </div>
+
+            <div style={{display:"flex",alignItems:"center",gap:7,padding:"0 18px 12px",overflowX:"auto",WebkitOverflowScrolling:"touch",msOverflowStyle:"none",scrollbarWidth:"none"}}>
+              {["All","TikTok","Instagram","Facebook"].map(pl=>{
+                const pp=P[pl];const sel=filter===pl;
+                return <button key={pl} onClick={()=>setFilter(pl)} style={{background:sel?(pp?`${pp.accent}1A`:"rgba(28,25,22,0.13)"):"rgba(236,230,222,0.5)",border:`1.5px solid ${sel?(pp?.accent+"55"||C.borderHi):"rgba(255,255,255,0.55)"}`,borderRadius:20,padding:"6px 15px",color:sel?(pp?.accent||C.dark):C.mid,fontSize:12.5,fontWeight:700,cursor:"pointer",boxShadow:sel&&pp?`0 0 14px ${pp.glow}`:"0 1px 0 rgba(255,255,255,0.6) inset",transition:"all 0.18s",whiteSpace:"nowrap",flexShrink:0,backdropFilter:"blur(8px)"}}>{pl==="All"?"All":pl}</button>;
+              })}
+              <div style={{width:1,height:18,background:C.border,flexShrink:0,marginLeft:2}}/>
+              <div style={{position:"relative",flexShrink:0}}>
+                <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:12,color:C.muted,pointerEvents:"none"}}>⌕</span>
+                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{background:"rgba(236,230,222,0.5)",border:"1.5px solid rgba(255,255,255,0.55)",backdropFilter:"blur(8px)",borderRadius:20,padding:"6px 12px 6px 26px",color:C.dark,fontSize:12,outline:"none",width:120,transition:"border 0.15s,width 0.2s"}}
+                  onFocus={e=>{e.target.style.border="1.5px solid rgba(28,25,22,0.3)";e.target.style.width="155px";}}
+                  onBlur={e=>{e.target.style.border="1.5px solid rgba(255,255,255,0.55)";e.target.style.width="120px";}}
+                />
+              </div>
+              <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{background:"rgba(236,230,222,0.5)",border:"1.5px solid rgba(255,255,255,0.55)",backdropFilter:"blur(8px)",borderRadius:20,padding:"6px 11px",color:C.mid,fontSize:12,outline:"none",cursor:"pointer",flexShrink:0}}>
+                <option value="latest">Latest</option>
+                <option value="rating">Top Rated</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{maxWidth:1100,margin:"0 auto",padding:"18px 14px 44px",position:"relative",zIndex:1}}>
+            {loading?<Spinner/>:filtered.length===0?(
+              <div style={{textAlign:"center",padding:"90px 20px"}}>
+                <div style={{width:72,height:72,borderRadius:20,margin:"0 auto 18px",background:"rgba(236,230,222,0.6)",border:"1px solid rgba(255,255,255,0.7)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,color:C.muted}}>▶</div>
+                <div style={{fontSize:16,fontWeight:700,color:C.mid}}>Vault kosong</div>
+                <div style={{fontSize:13,color:C.muted,marginTop:5}}>Tekan <span style={{color:"#FE2C55",fontWeight:700}}>+ Save</span> untuk mula</div>
+              </div>
+            ):(
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(290px,1fr))",gap:16}}>
+                {filtered.map(v=><VideoCard key={v.firebaseKey} v={v} onUpdate={updateVideo} onDelete={deleteVideo}/>)}
+              </div>
+            )}
+          </div>
+
+          <div style={{textAlign:"center",padding:"12px 16px 30px",position:"relative",zIndex:1}}>
+            <div style={{display:"inline-flex",alignItems:"center",gap:7,background:"rgba(236,230,222,0.5)",border:"1px solid rgba(255,255,255,0.6)",backdropFilter:"blur(12px)",borderRadius:20,padding:"6px 16px",boxShadow:"0 2px 10px rgba(28,25,22,0.08)"}}>
+              <span style={{fontSize:11.5,color:C.muted}}>Built by</span>
+              <span style={{fontSize:12,fontWeight:900,background:"linear-gradient(90deg,#FE2C55,#B33AB4)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Ali</span>
+              <span style={{fontSize:11,color:C.border}}>·</span>
+              <span style={{fontSize:12,fontWeight:900,background:"linear-gradient(90deg,#1877F2,#B33AB4)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>TMOMO Buddy</span>
+            </div>
+          </div>
+
+          {showModal&&<AddModal onAdd={addVideo} onClose={()=>setShowModal(false)}/>}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App/>);
+  </script>
+</body>
+</html>
